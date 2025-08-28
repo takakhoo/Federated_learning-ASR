@@ -1,0 +1,56 @@
+# Large model files
+*.pth
+*.pt
+*.ckpt
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+
+# Training data files
+*.npz
+*.npy
+
+# Checkpoint directories
+checkpoints/
+model_checkpoints/
+
+# Experiment results with large files
+experiment_results/successful_runs/*/model_checkpoint.pth
+experiment_results/successful_runs/*/training_data.npz
+working_scripts/ds2_experiments/comprehensive_experiments/*/checkpoints/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp

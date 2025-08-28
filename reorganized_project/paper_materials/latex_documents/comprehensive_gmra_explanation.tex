@@ -1,0 +1,945 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{longtable}
+
+\geometry{margin=1in}
+
+\title{\textbf{Complete Beginner's Guide to Federated Learning and Gradient Reconstruction: \\ Understanding Every Line of Code}}
+\author{Taka Khoo \\ DARPA CASTLE Project with Minh Bui}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+\newpage
+
+\section{What is Federated Learning? (In Super Simple Terms)}
+
+\subsection{The Big Picture: Why We Need This}
+
+Imagine you're trying to teach a computer to recognize speech (like Siri or Alexa). Normally, you'd need to collect millions of voice recordings from people all over the world and put them all in one big computer to train your model. But this creates a HUGE problem:
+
+\textbf{Privacy Problem:} People don't want their voice recordings sent to some big company's computer! It's like sending your personal diary to a stranger.
+
+\textbf{Federated Learning Solution:} Instead of sending all the data to one place, we send the \textit{learning algorithm} to where the data lives, train it there, and only send back the \textit{learned knowledge} (not the actual voice recordings).
+
+\subsection{The Analogy: Learning to Cook Without Sharing Recipes}
+
+Think of it like this:
+\begin{itemize}
+    \item \textbf{Traditional Learning:} Everyone sends their secret family recipes to a master chef, who learns from all of them
+    \item \textbf{Federated Learning:} The master chef sends cooking instructions to everyone's homes, they learn from their own recipes, and only send back what they learned (not the actual recipes)
+\end{itemize}
+
+\subsection{What We're Actually Doing in This Project}
+
+We're NOT doing traditional federated learning. Instead, we're doing something called \textbf{gradient reconstruction}, which is like:
+
+\textbf{The Problem:} Even when you only send back the "learned knowledge" (gradients), clever attackers can sometimes figure out what the original data was!
+
+\textbf{Our Goal:} Understand how vulnerable speech recognition systems are to these attacks, so we can make them more secure.
+
+\section{Understanding the DeepSpeech Models (DS1 vs DS2)}
+
+\subsection{What is DeepSpeech?}
+
+DeepSpeech is like a brain that can listen to someone talking and write down what they said. It's like having a super-smart secretary who never makes typos.
+
+\subsection{DeepSpeech 1 (DS1): The Simple Version}
+
+Think of DS1 like a simple calculator:
+\begin{itemize}
+    \item \textbf{Input:} Audio converted to numbers (MFCC features)
+    \item \textbf{Processing:} 3 simple math layers + 1 memory layer (LSTM) + 2 more math layers
+    \item \textbf{Output:} Letters and words
+\end{itemize}
+
+\textbf{Why DS1 is Simple:}
+\begin{itemize}
+    \item Only 3 fully connected layers (like simple multiplication)
+    \item 1 bidirectional LSTM (memory layer that can look forward and backward)
+    \item No fancy image processing
+    \item Easy to understand and debug
+\end{itemize}
+
+\subsection{DeepSpeech 2 (DS2): The Fancy Version}
+
+Think of DS2 like a supercomputer:
+\begin{itemize}
+    \item \textbf{Input:} Raw audio converted to spectrograms (like music visualizers)
+    \item \textbf{Processing:} 2 image processing layers (convolutional) + 5 memory layers (RNN) + 1 math layer
+    \item \textbf{Output:} Letters and words
+\end{itemize}
+
+\textbf{Why DS2 is Complex:}
+\begin{itemize}
+    \item 2 convolutional layers (like Photoshop filters for audio)
+    \item 5 recurrent layers (much more memory and processing power)
+    \item More sophisticated audio processing
+    \item Harder to understand and debug
+\end{itemize}
+
+\section{The Core Problem: Gradient Reconstruction Attack}
+
+\subsection{What is a Gradient? (In Super Simple Terms)}
+
+A gradient is like a "learning direction" - it tells the computer which way to move to get better at its job.
+
+\textbf{Analogy:} Imagine you're trying to find the top of a hill while blindfolded. The gradient is like a compass that tells you "go uphill" or "go downhill."
+
+\subsection{The Attack Scenario}
+
+Here's what happens in our attack:
+
+\begin{enumerate}
+    \item \textbf{Step 1:} Someone trains a speech recognition model on their private voice data
+    \item \textbf{Step 2:} They send the model to a central server (this is normal federated learning)
+    \item \textbf{Step 3:} The server sends back "learning directions" (gradients) to improve the model
+    \item \textbf{Step 4:} An attacker intercepts these gradients
+    \item \textbf{Step 5:} The attacker tries to figure out what the original voice data was
+\end{enumerate}
+
+\subsection{Why This is Scary}
+
+If successful, an attacker could:
+\begin{itemize}
+    \item Hear what you said in private
+    \item Steal your voice patterns
+    \item Impersonate you
+    \item Learn sensitive information from your conversations
+\end{itemize}
+
+\section{Understanding the Code Structure}
+
+\subsection{The Main Files}
+
+Our project has two main scripts:
+\begin{itemize}
+    \item \texttt{reconstruct\_ds1\_run\_many\_sample.py} - Attacks DeepSpeech 1
+    \item \texttt{reconstruct\_ds2\_run\_many\_sample.py} - Attacks DeepSpeech 2
+\end{itemize}
+
+\subsection{What Each File Does}
+
+Both files do the same thing but with different models:
+\begin{enumerate}
+    \item Load a pre-trained speech recognition model
+    \item Load some voice data (LibriSpeech dataset)
+    \item Calculate the gradients that would be sent back to the server
+    \item Try to reconstruct the original voice data from just the gradients
+    \item Save the results and see how close we got
+\end{enumerate}
+
+\section{Breaking Down the Code Line by Line}
+
+\subsection{Import Statements and Setup}
+
+Let's look at the very beginning of the code:
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+import torch
+import torch.optim as optim
+import argparse
+from torch import nn
+import sys, os
+import time
+\end{lstlisting}
+
+\textbf{What Each Line Means:}
+\begin{itemize}
+    \item \texttt{import torch}: This is PyTorch, a library for deep learning (like a toolbox for building AI)
+    \item \texttt{import torch.optim as optim}: This gives us optimization algorithms (ways to make the AI learn better)
+    \item \texttt{import argparse}: This helps us read command-line arguments (like when you type \texttt{python script.py --lr 0.5})
+    \item \texttt{from torch import nn}: This gives us neural network building blocks (like LEGO pieces for AI)
+    \item \texttt{import sys, os}: System and operating system functions (like file management)
+    \item \texttt{import time}: For measuring how long things take
+\end{itemize}
+
+\subsection{Setting Up the Device}
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+device = 'cuda:0'
+\end{lstlisting}
+
+\textbf{What This Means:}
+\begin{itemize}
+    \item \texttt{cuda:0} means "use the first GPU" (Graphics Processing Unit)
+    \item GPUs are like super-fast calculators that can do many math problems at once
+    \item Regular computers use CPUs (Central Processing Units) which are slower but more general-purpose
+    \item Deep learning is mostly math, so GPUs make it much faster
+\end{itemize}
+
+\subsection{The Main Functions}
+
+\subsubsection{Function 1: \texttt{get\_device\_net}}
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+def get_device_net(FLAGS, use_relu):
+    device = 'cuda:0'
+    net = DeepSpeech1WithContextFrames(FLAGS.n_context, FLAGS.drop_prob, use_relu=use_relu).to(device)
+    return device, net
+\end{lstlisting}
+
+\textbf{What This Function Does:}
+\begin{itemize}
+    \item Takes two inputs: \texttt{FLAGS} (all our settings) and \texttt{use\_relu} (whether to use a certain activation function)
+    \item Sets the device to GPU
+    \item Creates a DeepSpeech 1 model with specific settings
+    \item Moves the model to the GPU (\texttt{.to(device)})
+    \item Returns both the device and the model
+\end{itemize}
+
+\textbf{What Each Parameter Means:}
+\begin{itemize}
+    \item \texttt{FLAGS.n\_context}: How many audio frames to look at together (like looking at 3 words instead of just 1)
+    \item \texttt{FLAGS.drop\_prob}: How much to randomly turn off parts of the network during training (prevents overfitting)
+    \item \texttt{use\_relu}: Whether to use ReLU activation (a simple math function that makes the network non-linear)
+\end{itemize}
+
+\subsubsection{Function 2: \texttt{zero\_order\_optimization\_loop}}
+
+This is the most complex function. Let me break it down piece by piece:
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+def zero_order_optimization_loop(inputs, x_param, output_sizes, target_size,
+                                 net, dldw_targets, params_to_match, targets, prefix, FLAGS):
+\end{lstlisting}
+
+\textbf{What This Function Does:}
+This function tries to reconstruct the original audio by randomly guessing directions and seeing which one makes the gradients more similar.
+
+\textbf{The Analogy:}
+Imagine you're trying to find a hidden treasure in a dark room:
+\begin{itemize}
+    \item You can't see where you're going (zero-order means no gradient information)
+    \item You randomly try different directions
+    \item You measure how close you are to the treasure after each step
+    \item You keep going in the direction that gets you closer
+\end{itemize}
+
+\textbf{What Each Parameter Means:}
+\begin{itemize}
+    \item \texttt{inputs}: The original audio data (what we're trying to reconstruct)
+    \item \texttt{x\_param}: Our current guess at what the audio should be
+    \item \texttt{output\_sizes}: How long each audio sequence is
+    \item \texttt{target\_size}: The target length
+    \item \texttt{net}: The neural network model
+    \item \texttt{dldw\_targets}: The target gradients (what we're trying to match)
+    \item \texttt{params\_to\_match}: Which network parameters to use for gradient matching
+    \item \texttt{targets}: The text transcriptions
+    \item \texttt{prefix}: A name for saving files
+    \item \texttt{FLAGS}: All our settings
+\end{itemize}
+
+\subsection{The Core Algorithm: Random Direction Search}
+
+Let's look at the heart of the zero-order optimization:
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+while i < FLAGS.zero_max_iter and not stop_condition:
+    # random 8 directions in the space of x_param
+    directions = torch.randn(8, *x_param.shape).to(device)
+    # normalize direction so that they have unit length
+    shape = directions.shape
+    directions = directions.reshape(8,-1)
+    directions = torch.functional.F.normalize(directions, dim=1)
+    directions = directions.reshape(shape)
+\end{lstlisting}
+
+\textbf{What This Does Step by Step:}
+\begin{enumerate}
+    \item \texttt{torch.randn(8, *x\_param.shape)}: Creates 8 random directions in the same shape as our audio data
+    \item \texttt{directions.reshape(8,-1)}: Flattens the directions to make them easier to work with
+    \item \texttt{torch.functional.F.normalize(directions, dim=1)}: Makes each direction exactly 1 unit long
+    \item \texttt{directions.reshape(shape)}: Puts the directions back to their original shape
+\end{enumerate}
+
+\textbf{Why We Normalize:}
+Think of it like this: If you're trying to take steps of exactly 1 meter, you need to make sure your step length is exactly 1 meter, not 0.5 meters or 2 meters.
+
+\subsection{Testing Each Direction}
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+# create a list to store the loss for each direction
+losses = []
+current_loss, _ = get_meta_loss(x_param)
+
+for d in directions:
+    x_param_new = x_param + step_size * d
+    mloss, _ = get_meta_loss(x_param_new)
+    losses.append(mloss.item())
+\end{lstlisting}
+
+\textbf{What This Does:}
+\begin{enumerate}
+    \item Creates an empty list to store how bad each direction is
+    \item Calculates how bad our current guess is
+    \item For each random direction:
+    \begin{itemize}
+        \item Takes a step in that direction: \texttt{x\_param + step\_size * d}
+        \item Calculates how bad this new guess is
+        \item Stores the result
+    \end{itemize}
+\end{enumerate}
+
+\textbf{The Analogy:}
+It's like standing in a room and trying 8 different directions:
+\begin{itemize}
+    \item You measure how far you are from the exit in your current position
+    \item You take a small step in direction 1 and measure again
+    \item You take a small step in direction 2 and measure again
+    \item You repeat for all 8 directions
+    \item You remember which direction got you closest to the exit
+\end{itemize}
+
+\subsection{Finding the Best Direction}
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+# find the best direction by the smallest loss, argmin
+best_direction = directions[np.argmin(losses)]
+
+if np.min(losses) < current_loss.item():
+    # best_direction = best_direction.mean(dim=0)
+    x_param = x_param + step_size * best_direction
+    tolerance = 10
+    step_size = FLAGS.zero_lr
+else:  
+    logging.info('No direction found, reducing step size, tolerance: {}, {}'.format(step_size,tolerance))
+    tolerance -=1
+    step_size *= 0.5
+    if tolerance < 0:
+        stop_condition = True
+\end{lstlisting}
+
+\textbf{What This Does:}
+\begin{enumerate}
+    \item \texttt{np.argmin(losses)}: Finds which direction gave the lowest loss (best result)
+    \item \texttt{best\_direction = directions[...]}: Gets the actual direction vector
+    \item If we found a better direction:
+    \begin{itemize}
+        \item Move in that direction: \texttt{x\_param + step\_size * best\_direction}
+        \item Reset our tolerance counter
+        \item Keep the same step size
+    \end{itemize}
+    \item If no direction was better:
+    \begin{itemize}
+        \item Reduce the step size by half
+        \item Decrease tolerance
+        \item If tolerance runs out, stop trying
+    \end{itemize}
+\end{enumerate}
+
+\textbf{The Analogy:}
+It's like trying to find your way out of a maze:
+\begin{itemize}
+    \item If you find a direction that gets you closer to the exit, you take that step
+    \item If none of the directions help, you take smaller steps (maybe you're too close to a wall)
+    \item If you keep getting stuck, eventually you give up and try a different approach
+\end{itemize}
+
+\section{Understanding the Loss Functions}
+
+\subsection{What is a Loss Function?}
+
+A loss function is like a "score" that tells you how bad your current guess is. Lower is better.
+
+\textbf{Analogy:} Think of it like a video game where you want the lowest score possible.
+
+\subsection{The Meta Loss Function}
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+def meta_loss(output, targets, output_sizes, target_sizes, dldw_targets, params_to_match, loss_func, FLAGS):
+    loss = loss_func(output, targets)
+    dldws = torch.autograd.grad(loss, params_to_match, create_graph=True)
+    loss = 0 
+    for dldw, dldw_target in zip(dldws, dldw_targets):
+        loss += grad_distance(dldw, dldw_target, FLAGS)
+    return loss, dldws
+\end{lstlisting}
+
+\textbf{What This Function Does:}
+\begin{enumerate}
+    \item Calculates the normal loss (how bad the speech recognition is)
+    \item Calculates the gradients (learning directions) for the network parameters
+    \item Compares these gradients to the target gradients we're trying to match
+    \item Returns the total loss and the gradients
+\end{enumerate}
+
+\textbf{Why We Call It "Meta Loss":}
+Because it's a loss function that measures how well we're matching gradients, not how well we're recognizing speech. It's like having a "meta-game" where the goal is to fool the gradient matching, not to recognize speech.
+
+\subsection{The Gradient Distance Function}
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+def grad_distance(g1, g2, FLAGS):
+    if FLAGS.top_grad_percentage < 1.0 and g1.dim() >=2:
+        top_k = int(FLAGS.top_grad_percentage * g2.numel())
+        g1 = g1.flatten()
+        g2 = g2.flatten()
+        indices = torch.topk(g2.abs(), top_k)[1] 
+        g1 = g1[indices]
+        g2 = g2[indices]
+\end{lstlisting}
+
+\textbf{What This Does:}
+\begin{enumerate}
+    \item If we only want to match the top gradients (not all of them):
+    \item \texttt{top\_k = int(FLAGS.top\_grad\_percentage * g2.numel())}: Calculate how many gradients to keep
+    \item \texttt{torch.topk(g2.abs(), top\_k)[1]}: Find the indices of the largest gradients
+    \item Keep only those top gradients from both g1 and g2
+\end{enumerate}
+
+\textbf{Why We Do This:}
+Sometimes the most important information is in the largest gradients. It's like focusing on the loudest sounds in a recording instead of trying to hear every single whisper.
+
+\subsection{Different Distance Metrics}
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+if FLAGS.distance_function.lower() == 'cosine':
+    return 1 - torch.nn.functional.cosine_similarity(g1.reshape(1,-1), g2.reshape(1,-1))
+elif FLAGS.distance_function.lower() == 'l2':
+    return torch.nn.functional.mse_loss(g1, g2)
+elif FLAGS.distance_function.lower() == 'l1':
+    return torch.nn.functional.l1_loss(g1, g2)
+elif FLAGS.distance_function.lower() == 'cosine+l2':
+    return FLAGS.distance_function_weight * (1 - torch.nn.functional.cosine_similarity(g1.reshape(1,-1), g2.reshape(1,-1))) + (1- FLAGS.distance_function_weight) * torch.nn.functional.mse_loss(g1, g2)
+\end{lstlisting}
+
+\textbf{What Each Distance Function Means:}
+
+\subsubsection{Cosine Distance}
+\begin{itemize}
+    \item \textbf{What it measures:} How similar the directions are, regardless of magnitude
+    \item \textbf{Formula:} $1 - \cos(\theta)$ where $\theta$ is the angle between the vectors
+    \item \textbf{Analogy:} Like measuring if two arrows point in the same direction, not how long they are
+    \item \textbf{When to use:} When you care about the pattern, not the absolute values
+\end{itemize}
+
+\subsubsection{L2 Distance (Mean Squared Error)}
+\begin{itemize}
+    \item \textbf{What it measures:} How far apart the values are, with large differences penalized more
+    \item \textbf{Formula:} $\frac{1}{n}\sum_{i=1}^{n}(g1_i - g2_i)^2$
+    \item \textbf{Analogy:} Like measuring the straight-line distance between two points
+    \item \textbf{When to use:} When you care about the absolute values and want to penalize large errors heavily
+\end{itemize}
+
+\subsubsection{L1 Distance (Mean Absolute Error)}
+\begin{itemize}
+    \item \textbf{What it measures:} How far apart the values are, with all differences treated equally
+    \item \textbf{Formula:} $\frac{1}{n}\sum_{i=1}^{n}|g1_i - g2_i|$
+    \item \textbf{Analogy:} Like measuring the Manhattan distance (how many blocks you have to walk)
+    \item \textbf{When to use:} When you want to be robust to outliers
+\end{itemize}
+
+\subsubsection{Cosine + L2 Combination}
+\begin{itemize}
+    \item \textbf{What it measures:} A weighted combination of both direction and magnitude
+    \item \textbf{Formula:} $\alpha \cdot \text{cosine\_distance} + (1-\alpha) \cdot \text{L2\_distance}$
+    \item \textbf{Analogy:} Like caring both about the direction you're pointing AND how far you are from the target
+    \item \textbf{When to use:} When you want the best of both worlds
+\end{itemize}
+
+\section{Understanding the Optimization Process}
+
+\subsection{Two-Phase Optimization}
+
+Our reconstruction process has two phases:
+
+\subsubsection{Phase 1: First-Order Optimization}
+\begin{itemize}
+    \item \textbf{What it uses:} Gradient information (like having a map)
+    \textbf{How it works:} Uses the gradient to know exactly which direction to go
+    \item \textbf{Analogy:} Like having GPS navigation that tells you exactly which way to turn
+    \item \textbf{When it stops:} When the loss stops decreasing significantly
+\end{itemize}
+
+\subsubsection{Phase 2: Zero-Order Optimization}
+\begin{itemize}
+    \item \textbf{What it uses:} Random sampling (like exploring blindly)
+    \textbf{How it works:} Tries random directions and picks the best one
+    \item \textbf{Analogy:} Like trying different paths when your GPS fails
+    \item \textbf{When it stops:} When no better direction is found or step size becomes too small
+\end{itemize}
+
+\subsection{Why Two Phases?}
+
+\begin{itemize}
+    \item \textbf{First-order is fast but can get stuck:} Like GPS that might lead you to a dead end
+    \item \textbf{Zero-order is slow but can escape local minima:} Like exploring on foot to find a better path
+    \item \textbf{Combination gives best results:} Use GPS to get close, then explore to get to the exact destination
+\end{itemize}
+
+\section{Understanding the Data Flow}
+
+\subsection{How Data Moves Through the System}
+
+\begin{enumerate}
+    \item \textbf{Input:} Audio files from LibriSpeech dataset
+    \item \textbf{Preprocessing:} Convert audio to MFCC features (numbers that represent sound)
+    \item \textbf{Model Forward Pass:} Run the audio through DeepSpeech to get predictions
+    \item \textbf{Loss Calculation:} Compare predictions to actual transcriptions
+    \item \textbf{Gradient Calculation:} Figure out how to change the model to do better
+    \item \textbf{Reconstruction:} Try to figure out what the original audio was from the gradients
+    \item \textbf{Output:} Reconstructed audio and comparison metrics
+\end{enumerate}
+
+\subsection{The LibriSpeech Dataset}
+
+\begin{itemize}
+    \item \textbf{What it is:} A collection of audiobooks read by volunteers
+    \item \textbf{Why we use it:} It's clean, well-transcribed, and publicly available
+    \item \textbf{How it's organized:} By duration (0-1s, 1-2s, 2-3s, 3-4s)
+    \item \textbf{What we get:} Audio files + text transcriptions
+\end{itemize}
+
+\section{Understanding the Output and Results}
+
+\subsection{What Gets Saved}
+
+Every experiment saves:
+\begin{itemize}
+    \item \texttt{x\_param}: The reconstructed audio data
+    \item \texttt{time}: How long the optimization took
+    \texttt{inputs}: The original audio data (for comparison)
+    \item \texttt{targets}: The text transcriptions
+    \texttt{transcript}: The actual words that were spoken
+\end{itemize}
+
+\subsection{How to Interpret Results}
+
+\subsubsection{MAE (Mean Absolute Error)}
+\begin{itemize}
+    \item \textbf{What it measures:} How different the reconstructed audio is from the original
+    \item \textbf{Formula:} $\frac{1}{n}\sum_{i=1}^{n}|x_i - \hat{x}_i|$
+    \textbf{What good values are:} Lower is better, 0 means perfect reconstruction
+    \item \textbf{Analogy:} Like measuring how many pixels are wrong in a photo copy
+\end{itemize}
+
+\subsubsection{Loss Values}
+\begin{itemize}
+    \item \textbf{Gradient Matching Loss:} How well we're matching the target gradients
+    \item \textbf{Regularization Loss:} How "smooth" or "simple" our reconstruction is
+    \item \textbf{Total Loss:} The combination of both
+\end{itemize}
+
+\subsubsection{Visualizations}
+The code generates plots showing:
+\begin{itemize}
+    \item Original audio vs reconstructed audio
+    \item Loss over time
+    \item Gradient matching progress
+    \item Regularization effects
+\end{itemize}
+
+\section{Key Differences Between DS1 and DS2}
+
+\subsection{Architecture Differences}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Feature} & \textbf{DeepSpeech 1} & \textbf{DeepSpeech 2} \\
+\hline
+Input Processing & Simple MFCC features & Spectrogram + normalization \\
+\hline
+Convolutional Layers & None & 2 layers with batch normalization \\
+\hline
+Recurrent Layers & 1 bidirectional LSTM & 5 bidirectional RNN layers \\
+\hline
+Fully Connected & 5 layers & 1 layer \\
+\hline
+Complexity & Simple & Complex \\
+\hline
+\end{tabular}
+\caption{Architecture Comparison}
+\end{table}
+
+\subsection{Why DS2 is Harder to Attack}
+
+\begin{itemize}
+    \item \textbf{More Parameters:} More complex model means more gradients to match
+    \item \textbf{Convolutional Layers:} These create spatial relationships that are hard to reverse
+    \item \textbf{Multiple RNN Layers:} Each layer adds more complexity and non-linearity
+    \item \textbf{Feature Extraction:} More sophisticated audio processing makes reconstruction harder
+\end{itemize}
+
+\subsection{What This Means for Security}
+
+\begin{itemize}
+    \item \textbf{DS1:} Easier to attack, less secure
+    \item \textbf{DS2:} Harder to attack, more secure
+    \item \textbf{Implication:} Model complexity can be a security feature
+\end{itemize}
+
+\section{Understanding the Command Line Arguments}
+
+\subsection{Basic Arguments}
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+parser.add_argument("--batch-start", required=True, type=int, help="index of the start")
+parser.add_argument("--batch-end", required=True, type=int, help="index of the end")
+parser.add_argument("--optimizer_name", type=str, default='Adam', help="Optimizer to use")
+parser.add_argument("--lr", type=float, default=0.5, help="Learning rate for optimization")
+\end{lstlisting}
+
+\textbf{What Each Does:}
+\begin{itemize}
+    \item \texttt{--batch-start/--batch-end}: Which audio files to process (like saying "process files 10 through 20")
+    \item \texttt{--optimizer\_name}: Which optimization algorithm to use (Adam or SGD)
+    \item \texttt{--lr}: How big steps to take during optimization
+\end{itemize}
+
+\subsection{Advanced Arguments}
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+parser.add_argument("--reg", type=str, default='None', choices=["L1", "L2", "TV", "None"])
+parser.add_argument("--reg_weight", type=float, default=0.0, help="Weight of regularization")
+parser.add_argument("--distance_function", type=str, default='cosine')
+parser.add_argument("--top_grad_percentage", type=float, default=1.0)
+\end{lstlisting}
+
+\textbf{What Each Does:}
+\begin{itemize}
+    \item \texttt{--reg}: What type of regularization to use (L1, L2, TV, or none)
+    \item \texttt{--reg\_weight}: How much to weight the regularization vs. gradient matching
+    \item \texttt{--distance\_function}: How to measure gradient similarity
+    \item \texttt{--top\_grad\_percentage}: What percentage of gradients to match (1.0 = all, 0.1 = top 10\%)
+\end{itemize}
+
+\section{How to Run Experiments}
+
+\subsection{Basic DS1 Experiment}
+
+\begin{lstlisting}[language=bash]
+cd /scratch2/f004h1v/federated_learning/asr-grad-reconstruction
+conda activate fl-env
+python src/reconstruct_ds1_run_many_sample.py \
+    --batch-start 0 \
+    --batch-end 10 \
+    --lr 0.5 \
+    --max_iter 1000 \
+    --reg L2 \
+    --reg_weight 0.1
+\end{lstlisting}
+
+\subsection{Basic DS2 Experiment}
+
+\begin{lstlisting}[language=bash]
+python src/reconstruct_ds2_run_many_sample.py \
+    --batch-start 0 \
+    --batch-end 5 \
+    --lr 0.01 \
+    --max_iter 500 \
+    --reg L2 \
+    --reg_weight 0.1
+\end{lstlisting}
+
+\subsection{What to Expect}
+
+\subsubsection{During Training}
+You'll see output like:
+\begin{lstlisting}[language=bash]
+INFO: Processing batch 0/10
+INFO: inputs mean and std: 0.123, 0.456
+INFO: TEXT: hello world
+INFO: Running first order optimization loop
+INFO: Iter, Loss (A-G-Gw-Gb-R), Gradient Norm, Learning Rate, MAE: 0, 0.12345678, 0.1234, 0.5678, 0.0000, 0.1234, 0.5000, 0.1234
+\end{lstlisting}
+
+\subsubsection{What Each Number Means}
+\begin{itemize}
+    \item \textbf{Iter}: Which iteration we're on
+    \item \textbf{Loss}: Total loss value
+    \textbf{A}: Actual loss (speech recognition quality)
+    \item \textbf{G}: Gradient matching loss
+    \textbf{Gw}: Weight gradient distance
+    \item \textbf{Gb}: Bias gradient distance
+    \textbf{R}: Regularization loss
+    \item \textbf{Gradient Norm}: How big the gradients are
+    \textbf{Learning Rate}: Current step size
+    \item \textbf{MAE}: How close we are to the original audio
+\end{itemize}
+
+\section{Understanding the Mathematics}
+
+\subsection{Gradient Descent (First-Order Optimization)}
+
+\textbf{The Basic Idea:}
+We want to minimize a function $f(x)$. The gradient $\nabla f(x)$ tells us which direction to go.
+
+\textbf{The Update Rule:}
+$$x_{t+1} = x_t - \alpha \nabla f(x_t)$$
+
+Where:
+\begin{itemize}
+    \item $x_t$ is our current position
+    \item $\alpha$ is the learning rate (step size)
+    \item $\nabla f(x_t)$ is the gradient at our current position
+\end{itemize}
+
+\textbf{Why This Works:}
+The gradient points in the direction of steepest ascent. Since we want to go downhill (minimize), we go in the opposite direction.
+
+\subsection{Stochastic Gradient Descent}
+
+\textbf{The Problem:}
+Sometimes calculating the exact gradient is expensive or impossible.
+
+\textbf{The Solution:}
+Use an estimate of the gradient based on a small sample of data.
+
+\textbf{The Update Rule:}
+$$x_{t+1} = x_t - \alpha \hat{\nabla} f(x_t)$$
+
+Where $\hat{\nabla} f(x_t)$ is our estimate of the true gradient.
+
+\subsection{Adam Optimizer}
+
+\textbf{What It Does:}
+Adam combines the best of several optimization techniques:
+\begin{itemize}
+    \item \textbf{Momentum:} Like having inertia - if you're going in a good direction, keep going
+    \item \textbf{Adaptive Learning Rates:} Automatically adjusts step size for each parameter
+    \item \textbf{Bias Correction:} Fixes the bias introduced by momentum
+\end{itemize}
+
+\textbf{The Update Rule:}
+\begin{align}
+m_t &= \beta_1 m_{t-1} + (1-\beta_1) \nabla f(x_t) \\
+v_t &= \beta_2 v_{t-1} + (1-\beta_2) (\nabla f(x_t))^2 \\
+\hat{m}_t &= \frac{m_t}{1-\beta_1^t} \\
+\hat{v}_t &= \frac{v_t}{1-\beta_2^t} \\
+x_{t+1} &= x_t - \frac{\alpha}{\sqrt{\hat{v}_t} + \epsilon} \hat{m}_t
+\end{align}
+
+Where:
+\begin{itemize}
+    \item $m_t$ is the momentum
+    \item $v_t$ is the variance estimate
+    \item $\beta_1, \beta_2$ are momentum parameters (usually 0.9 and 0.999)
+    \item $\epsilon$ is a small number to prevent division by zero
+\end{itemize}
+
+\subsection{Regularization}
+
+\subsubsection{L2 Regularization (Ridge Regression)}
+\textbf{What it does:} Adds a penalty for large parameter values
+\textbf{Formula:} $L_{reg} = \lambda \sum_{i} w_i^2$
+\textbf{Why it helps:} Prevents overfitting by keeping parameters small
+
+\subsubsection{L1 Regularization (Lasso)}
+\textbf{What it does:} Adds a penalty for non-zero parameters
+\textbf{Formula:} $L_{reg} = \lambda \sum_{i} |w_i|$
+\textbf{Why it helps:} Creates sparse solutions (many parameters become exactly zero)
+
+\subsubsection{Total Variation (TV) Regularization}
+\textbf{What it does:} Penalizes large differences between neighboring values
+\textbf{Formula:} $L_{reg} = \lambda \sum_{i,j} |x_{i,j} - x_{i,j-1}| + |x_{i,j} - x_{i-1,j}|$
+\textbf{Why it helps:} Creates smooth, continuous reconstructions
+
+\section{Common Problems and Solutions}
+
+\subsection{Problem 1: Loss Not Decreasing}
+
+\textbf{Symptoms:}
+\begin{itemize}
+    \item Loss stays the same or increases
+    \item MAE doesn't improve
+    \item Gradients become very small
+\end{itemize}
+
+\textbf{Solutions:}
+\begin{itemize}
+    \item Reduce learning rate: \texttt{--lr 0.1} instead of \texttt{--lr 0.5}
+    \item Increase regularization: \texttt{--reg L2 --reg\_weight 0.1}
+    \item Try different distance function: \texttt{--distance\_function cosine}
+    \item Check if gradients are being computed correctly
+\end{itemize}
+
+\subsection{Problem 2: Out of Memory}
+
+\textbf{Symptoms:}
+\begin{itemize}
+    \item CUDA out of memory error
+    \item Process crashes
+    \item Very slow performance
+\end{itemize}
+
+\textbf{Solutions:}
+\begin{itemize}
+    \item Reduce batch size (though this project uses batch size 1)
+    \item Use shorter audio clips
+    \item Reduce model complexity
+    \item Use CPU instead of GPU (much slower but more memory)
+\end{itemize}
+
+\subsection{Problem 3: Poor Reconstruction Quality}
+
+\textbf{Symptoms:}
+\begin{itemize}
+    \item High MAE values
+    \item Reconstructed audio doesn't sound like original
+    \item Loss doesn't converge
+\end{itemize}
+
+\textbf{Solutions:}
+\begin{itemize}
+    \item Increase number of iterations: \texttt{--max\_iter 2000}
+    \item Try different initialization methods
+    \item Adjust regularization parameters
+    \item Use combination of distance functions
+\end{itemize}
+
+\section{How to Contribute to the Project}
+
+\subsection{What You Should Do First}
+
+\begin{enumerate}
+    \item \textbf{Understand the basics:} Read this document thoroughly
+    \item \textbf{Run simple experiments:} Start with small datasets and few iterations
+    \item \textbf{Analyze results:} Look at the plots and understand what they mean
+    \item \textbf{Try different parameters:} Experiment with learning rates, regularization, etc.
+    \item \textbf{Document findings:} Keep notes on what works and what doesn't
+\end{enumerate}
+
+\subsection{Areas for Improvement}
+
+\begin{itemize}
+    \item \textbf{Better initialization:} Find ways to start closer to the solution
+    \item \textbf{Adaptive step sizes:} Automatically adjust learning rates
+    \textbf{Multi-scale reconstruction:} Work at different resolutions
+    \item \textbf{Ensemble methods:} Combine multiple reconstruction attempts
+    \item \textbf{Better regularization:} Find more effective ways to constrain the solution
+\end{itemize}
+
+\subsection{Research Questions to Explore}
+
+\begin{itemize}
+    \item \textbf{Why does DS2 fail more than DS1?} What makes it more secure?
+    \item \textbf{What's the best distance function?} When should you use cosine vs L2?
+    \item \textbf{How does regularization affect reconstruction?} What's the optimal balance?
+    \textbf{Can we predict which samples will be easy/hard to reconstruct?}
+    \item \textbf{What defenses would make this attack fail?} How can we make systems more secure?
+\end{itemize}
+
+\section{Understanding the Big Picture}
+
+\subsection{Why This Research Matters}
+
+\begin{itemize}
+    \item \textbf{Privacy Protection:} Understanding attacks helps us build better defenses
+    \item \textbf{Model Security:} Knowing vulnerabilities helps secure AI systems
+    \textbf{Federated Learning Safety:} Making distributed learning truly private
+    \item \textbf{Regulatory Compliance:} Meeting privacy laws and regulations
+    \item \textbf{Trust in AI:} Building systems people can trust with their data
+\end{itemize}
+
+\subsection{The Broader Context}
+
+This work fits into a larger field of:
+\begin{itemize}
+    \item \textbf{Privacy-Preserving Machine Learning:} Training AI without sharing data
+    \textbf{Adversarial Machine Learning:} Understanding how AI systems can be attacked
+    \item \textbf{Secure Multi-Party Computation:} Computing on data without revealing it
+    \textbf{Differential Privacy:} Adding noise to protect individual data points
+    \item \textbf{Homomorphic Encryption:} Computing on encrypted data
+\end{itemize}
+
+\subsection{Your Role in the Project}
+
+As a researcher on this project, you should:
+\begin{itemize}
+    \item \textbf{Understand the code:} Know what every line does
+    \textbf{Run experiments:} Test different scenarios and parameters
+    \item \textbf{Analyze results:} Figure out what the numbers mean
+    \textbf{Identify patterns:} Find what makes attacks succeed or fail
+    \item \textbf{Propose improvements:} Suggest ways to make the system better
+    \textbf{Document everything:} Keep detailed notes for the paper
+\end{itemize}
+
+\section{Conclusion}
+
+\subsection{What You Should Know Now}
+
+After reading this document, you should understand:
+\begin{itemize}
+    \item What federated learning is and why it's important
+    \item How gradient reconstruction attacks work
+    \item The difference between DeepSpeech 1 and 2
+    \item What every function in the code does
+    \item How to run experiments and interpret results
+    \item The mathematics behind the optimization
+    \item How to contribute to improving the system
+\end{itemize}
+
+\subsection{Next Steps}
+
+\begin{enumerate}
+    \item \textbf{Read the code:} Go through each file line by line
+    \item \textbf{Run experiments:} Start with simple cases and build up
+    \textbf{Ask questions:} Don't hesitate to ask for clarification
+    \item \textbf{Take notes:} Document everything you learn
+    \textbf{Think critically:} Question assumptions and look for improvements
+    \item \textbf{Contribute ideas:} Share your insights with the team
+\end{enumerate}
+
+\subsection{Remember}
+
+\begin{itemize}
+    \item \textbf{There are no stupid questions:} If something isn't clear, ask!
+    \textbf{Start simple:} Don't try to understand everything at once
+    \item \textbf{Practice makes perfect:} Run lots of experiments
+    \textbf{Document everything:} Your notes will help others and yourself
+    \item \textbf{Think like a scientist:} Form hypotheses and test them
+    \textbf{Have fun:} This is cutting-edge research - enjoy it!
+\end{itemize}
+
+\section{Glossary}
+
+\begin{description}
+    \item[Federated Learning] A machine learning approach where models are trained across multiple devices without sharing raw data
+    \item[Gradient] A vector that points in the direction of steepest increase of a function
+    \item[Gradient Descent] An optimization algorithm that uses gradients to find the minimum of a function
+    \item[Loss Function] A function that measures how bad a prediction is
+    \item[Optimizer] An algorithm that updates model parameters to minimize loss
+    \item[Regularization] Techniques to prevent overfitting by adding constraints
+    \item[Overfitting] When a model learns the training data too well and performs poorly on new data
+    \item[Batch Size] The number of samples processed together in one forward/backward pass
+    \item[Learning Rate] The step size used in gradient descent
+    \item[Epoch] One complete pass through the entire training dataset
+    \item[Iteration] One update of the model parameters
+    \item[MAE] Mean Absolute Error - a measure of how close predictions are to true values
+    \item[MSE] Mean Squared Error - another measure of prediction accuracy
+    \item[LSTM] Long Short-Term Memory - a type of recurrent neural network
+    \item[RNN] Recurrent Neural Network - a neural network with memory
+    \item[CNN] Convolutional Neural Network - a neural network for processing grid-like data
+    \item[MFCC] Mel-frequency cepstral coefficients - audio features
+    \item[Spectrogram] A visual representation of the spectrum of frequencies in a signal over time
+\end{description}
+
+\section{References and Further Reading}
+
+\begin{itemize}
+    \item \textbf{DeepSpeech Paper:} \url{https://arxiv.org/abs/1412.5567}
+    \item \textbf{DeepSpeech 2 Paper:} \url{https://arxiv.org/abs/1512.02595}
+    \item \textbf{Federated Learning Survey:} \url{https://arxiv.org/abs/1908.07873}
+    \item \textbf{Gradient Inversion Attacks:} \url{https://arxiv.org/abs/2003.14053}
+    \item \textbf{PyTorch Tutorial:} \url{https://pytorch.org/tutorials/}
+    \item \textbf{CTC Loss Explanation:} \url{https://distill.pub/2017/ctc/}
+\end{itemize}
+
+\end{document}
